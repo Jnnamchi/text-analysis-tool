@@ -78,7 +78,7 @@ def cleanseWordList(words):
 	invalidWordPattern = "[^a-zA-Z-+]"
 	for word in words:
 		cleansedWord = word.replace(".", "").lower()
-		if (not re.search(invalidWordPattern, cleansedWord)) and len(word) > 1:
+		if (not re.search(invalidWordPattern, cleansedWord)) and len(cleansedWord) > 1:
 			cleansedWords.append(cleansedWord)
 	return cleansedWords
 
