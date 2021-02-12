@@ -1,12 +1,14 @@
 from random_username.generate import generate_username
+import re
 import nltk
 from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet
+from nltk.corpus import wordnet, stopwords
+nltk.download('stopwords')
 nltk.download('wordnet')
 nltk.download('averaged_perceptron_tagger')
 wordLemmatizer = WordNetLemmatizer()
-import re
+stopWords = set(stopwords.words('english'))
 
 # Welcome User
 def welcomeUser():
@@ -100,7 +102,7 @@ def cleanseWordList(posTaggedWordTuples):
 		word = posTaggedWordTuple[0]
 		pos = posTaggedWordTuple[1]
 		cleansedWord = word.replace(".", "").lower()
-		if (not re.search(invalidWordPattern, cleansedWord)) and len(cleansedWord) > 1:
+		if (not re.search(invalidWordPattern, cleansedWord)) and len(cleansedWord) > 1 and cleansedWord not in stopWords:
 			cleansedWords.append(wordLemmatizer.lemmatize(cleansedWord, treebankPosToWordnetPos(pos)))
 	return cleansedWords
 
