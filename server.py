@@ -10,8 +10,12 @@ app = Flask(__name__)
 # which tells the application which URL should call 
 # the associated function.
 @app.route('/health')
-def hello_world():
+def healthCheck():
     return 'Flask server is up and running'
+
+@app.route('/analyze-stock')
+def analyzeStock():
+    return {'data': 'Analysis coming soon'}
 
 # main driver function
 if __name__ == '__main__':
