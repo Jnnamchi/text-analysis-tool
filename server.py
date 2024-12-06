@@ -23,7 +23,7 @@ def healthCheck():
 
 @app.route('/analyze-stock/<ticker>', methods=["GET"])
 def analyzeStock(ticker):
-    # return stockDataTest
+    return stockDataTest
     # if len(ticker) > 5 or not ticker.isidentifier():
     #     abort(400, 'Invalid ticker symbol')
     # try:
