@@ -25,6 +25,8 @@ def getPriceHistory(company):
 	}
 
 def getEarningsDates(company):
+	return []
+	# print(company)
 	earningsDatesDf = company.earnings_dates
 	allDates = earningsDatesDf.index.strftime('%Y-%m-%d').tolist()
 	dateObjects = [datetime.strptime(date, '%Y-%m-%d') for date in allDates]
