@@ -2,15 +2,17 @@ import os
 import json
 import yfinance as yf
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from bs4 import BeautifulSoup
 import analyze
+import csv
+import io
 
 # -------------------------
 # Finnhub: basic info only
 # -------------------------
 
-FINNHUB_API_KEY = 'd5fhadhr01qnjhoc9sbgd5fhadhr01qnjhoc9sc0'  # set this on Render
+FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY", "").strip()
 
 def finnhub_get(path, params=None):
 	if not FINNHUB_API_KEY:
@@ -21,17 +23,17 @@ def finnhub_get(path, params=None):
 	params["token"] = FINNHUB_API_KEY
 
 	r = requests.get(f"{base}{path}", params=params, timeout=15)
-	r.raise_for_status()
+	if r.status_code >= 400:
+		try:
+			detail = r.json()
+		except Exception:
+			detail = r.text[:300]
+		raise RuntimeError(f"Finnhub error {r.status_code}: {detail}")
+
 	return r.json()
 
 def getBasicInfoFromFinnhub(symbol):
-	"""
-	Returns your existing basicInfo format:
-	{ longName, website, sector, fullTimeEmployees, marketCap, totalRevenue, trailingEps }
-	Best-effort mapping from Finnhub fields.
-	"""
 	profile = finnhub_get("/stock/profile2", {"symbol": symbol})
-	# metrics contains market cap / eps ttm / etc (varies by symbol/plan)
 	metrics_resp = finnhub_get("/stock/metric", {"symbol": symbol, "metric": "all"})
 	metric = (metrics_resp or {}).get("metric", {}) or {}
 
@@ -48,13 +50,12 @@ def getBasicInfoFromFinnhub(symbol):
 		"longName": pick_first(profile.get("name")),
 		"website": pick_first(profile.get("weburl")),
 		"sector": pick_first(profile.get("finnhubIndustry"), profile.get("sector")),
-		"fullTimeEmployees": pick_first(profile.get("employeeTotal"), profile.get("shareOutstanding")),  # employeeTotal is the usual
+		"fullTimeEmployees": pick_first(profile.get("employeeTotal")),
 		"marketCap": pick_first(metric.get("marketCapitalization"), profile.get("marketCapitalization")),
 		"totalRevenue": pick_first(metric.get("revenueTTM"), metric.get("totalRevenueTTM")),
 		"trailingEps": pick_first(metric.get("epsTTM"), metric.get("epsAnnual")),
 	}
 
-	# Normalize employees to int if it's numeric-ish, else keep as-is / empty
 	try:
 		if basicInfo["fullTimeEmployees"] != "":
 			basicInfo["fullTimeEmployees"] = int(float(basicInfo["fullTimeEmployees"]))
@@ -64,27 +65,78 @@ def getBasicInfoFromFinnhub(symbol):
 	return basicInfo
 
 # -------------------------
+# Free price history: Stooq (no key)
+# -------------------------
+
+def getPriceHistoryStooq(symbol):
+	"""
+	Free daily OHLC via Stooq CSV.
+	Returns same shape you used: {'price': [...], 'date': [...]}
+	Uses Open price to match your previous behavior.
+	"""
+	# Stooq uses lower-case tickers, US tickers often need ".us"
+	stooq_symbol = symbol.lower()
+	if "." not in stooq_symbol:
+		stooq_symbol = f"{stooq_symbol}.us"
+
+	url = f"https://stooq.com/q/d/l/?s={stooq_symbol}&i=d"
+
+	r = requests.get(url, timeout=20)
+	r.raise_for_status()
+
+	# CSV format: Date,Open,High,Low,Close,Volume
+	f = io.StringIO(r.text)
+	reader = csv.DictReader(f)
+
+	rows = []
+	for row in reader:
+		# Skip empty lines
+		if not row or not row.get("Date"):
+			continue
+		rows.append(row)
+
+	if not rows:
+		return {"price": [], "date": []}
+
+	# Only last ~12 months
+	end_dt = datetime.now(timezone.utc).date()
+	start_dt = end_dt - timedelta(days=365)
+
+	prices = []
+	dates = []
+	for row in rows:
+		try:
+			d = datetime.strptime(row["Date"], "%Y-%m-%d").date()
+		except Exception:
+			continue
+
+		if d < start_dt or d > end_dt:
+			continue
+
+		open_str = (row.get("Open") or "").strip()
+		if open_str == "" or open_str.lower() == "null":
+			continue
+
+		try:
+			open_price = float(open_str)
+		except Exception:
+			continue
+
+		dates.append(d.strftime("%Y-%m-%d"))
+		prices.append(open_price)
+
+	return {"price": prices, "date": dates}
+
+# -------------------------
 # Existing code below
 # -------------------------
 
 def extractBasicInfo(data):
-	keysToExtract = [ 'longName', 'website', 'sector', 'fullTimeEmployees', 'marketCap', 'totalRevenue', 'trailingEps' ]
+	keysToExtract = ['longName', 'website', 'sector', 'fullTimeEmployees', 'marketCap', 'totalRevenue', 'trailingEps']
 	basicInfo = {}
 	for key in keysToExtract:
-		if key in data:
-			basicInfo[key] = data[key]
-		else:
-			basicInfo[key] = ''
+		basicInfo[key] = data.get(key, '')
 	return basicInfo
-
-def getPriceHistory(company):
-	historyDf = company.history(period='12mo')
-	prices = historyDf['Open'].tolist()
-	dates = historyDf.index.strftime('%Y-%m-%d').tolist()
-	return {
-		'price': prices,
-		'date': dates
-	}
 
 # Future Earnings no longer supported
 def getEarningsDates(company):
@@ -103,7 +155,7 @@ def getCompanyNews(company):
 
 def extractNewsArticleTextFromHtml(soup):
 	allText = ''
-	result = soup.find_all('div', {'class':'body'})
+	result = soup.find_all('div', {'class': 'body'})
 	for res in result:
 		allText += res.text
 	return allText
@@ -116,25 +168,27 @@ def extractCompanyNewsArticles(newsArticles):
 	allArticlesText = ''
 	for newsArticle in newsArticles:
 		url = newsArticle['link']
-		page = requests.get(url, headers=headers)
+		page = requests.get(url, headers=headers, timeout=15)
 		soup = BeautifulSoup(page.text, 'html.parser')
 		if not soup.findAll(string='Continue reading'):
 			allArticlesText += extractNewsArticleTextFromHtml(soup)
 	return allArticlesText
 
 def getCompanyStockInfo(tickerSymbol):
-	# Still use yfinance for history + news (as you requested)
+	# Still use yfinance for news (your experiment)
 	company = yf.Ticker(tickerSymbol)
 
-	# ✅ Use Finnhub for basic info instead of company.info
-	# NO LONGER extractBasicInfo(company.info)
+	# ✅ Finnhub basic info
 	basicInfo = extractBasicInfo(getBasicInfoFromFinnhub(tickerSymbol))
-
 	if not basicInfo["longName"]:
 		raise NameError("Could not find stock info (Finnhub profile missing). Ticker may be invalid.")
 
-	priceHistory = getPriceHistory(company)
+	# ✅ Free price history (Stooq)
+	priceHistory = getPriceHistoryStooq(tickerSymbol)
+
 	futureEarningsDates = getEarningsDates(company)
+
+	# Keep yfinance news "as usual" for now
 	newsArticles = getCompanyNews(company)
 
 	newsArticlesAllText = extractCompanyNewsArticles(newsArticles)
@@ -149,5 +203,6 @@ def getCompanyStockInfo(tickerSymbol):
 	}
 	return finalStockAnalysis
 
-companyStockAnalysis = getCompanyStockInfo('MSFT')
-print(json.dumps(companyStockAnalysis, indent=4))
+if __name__ == "__main__":
+	companyStockAnalysis = getCompanyStockInfo('MSFT')
+	print(json.dumps(companyStockAnalysis, indent=4))
