@@ -150,7 +150,7 @@ def analyzeText(textToAnalyze):
 			"wordsPerSentence": round(wordsPerSentence, 1),
 			"sentiment": sentimentResult,
 			"wordCloudFilePath": wordCloudFilePath,
-			# "wordCloudImage": encodedWordcloud,
+			"wordCloudImage": encodedWordcloud,
 		},
 		"metadata": {
 			"sentencesAnalyzed": len(articleSentences),
