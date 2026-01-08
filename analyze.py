@@ -130,11 +130,17 @@ def analyzeText(textToAnalyze):
 	# Generate word cloud
 	separator = " "
 	wordCloudFilePath = "results/wordcloud.png"
-	wordcloud = WordCloud(width = 1000, height = 700, \
+	wordcloud = WordCloud(width = 500, height = 350, \
 		background_color="white", colormap="Set3", collocations=False).generate(separator.join(articleWordsCleansed))
 	# wordcloud.to_file(wordCloudFilePath)
 	imgIo = BytesIO()
-	wordcloud.to_image().save(imgIo, format='PNG')
+	wordcloud.to_image().save(
+		imgIo,
+		format="JPEG",
+		quality=65,      # 60–80 is a good range
+		optimize=True,
+		subsampling=2 
+	)
 	imgIo.seek(0)  # Move the pointer to the beginning of the BytesIO object
     
     # Encode the image as base64
