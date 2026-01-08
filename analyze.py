@@ -80,6 +80,7 @@ def extractKeySentences(sentences, searchPattern):
 
 # Get the average words per sentence, excluding punctuation
 def getWordsPerSentence(sentences):
+	print(sentences)
 	totalWords = 0
 	for sentence in sentences:
 		totalWords += len(sentence.split(" "))
@@ -113,6 +114,7 @@ def cleanseWordList(posTaggedWordTuples):
 	return cleansedWords
 
 def analyzeText(textToAnalyze):
+
 	articleSentences = tokenizeSentences(textToAnalyze)
 	articleWords = tokenizeWords(articleSentences)
 
@@ -148,7 +150,7 @@ def analyzeText(textToAnalyze):
 			"wordsPerSentence": round(wordsPerSentence, 1),
 			"sentiment": sentimentResult,
 			"wordCloudFilePath": wordCloudFilePath,
-			"wordCloudImage": encodedWordcloud,
+			# "wordCloudImage": encodedWordcloud,
 		},
 		"metadata": {
 			"sentencesAnalyzed": len(articleSentences),

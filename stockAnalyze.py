@@ -24,30 +24,30 @@ def getPriceHistory(company):
 		'date': dates
 	}
 
+# Future Earnings no longer supported
 def getEarningsDates(company):
 	return []
-	# print(company)
-	earningsDatesDf = company.earnings_dates
-	allDates = earningsDatesDf.index.strftime('%Y-%m-%d').tolist()
-	dateObjects = [datetime.strptime(date, '%Y-%m-%d') for date in allDates]
-	currentDate = datetime.now()
-	futureDates = [date.strftime('%Y-%m-%d') for date in dateObjects if date > currentDate]
-	return futureDates
+	# earningsDatesDf = company.earnings_dates
+	# allDates = earningsDatesDf.index.strftime('%Y-%m-%d').tolist()
+	# dateObjects = [datetime.strptime(date, '%Y-%m-%d') for date in allDates]
+	# currentDate = datetime.now()
+	# futureDates = [date.strftime('%Y-%m-%d') for date in dateObjects if date > currentDate]
+	# return futureDates
 
 def getCompanyNews(company):
 	newsList = company.news
 	allNewsArticles = []
 	for newsDict in newsList:
 		newsDictToAdd = {
-			'title': newsDict['title'],
-			'link': newsDict['link']
+			'title': newsDict['content']['title'],
+			'link': newsDict['content']['canonicalUrl']['url']
 		}
 		allNewsArticles.append(newsDictToAdd)
 	return allNewsArticles
 
 def extractNewsArticleTextFromHtml(soup):
 	allText = ''
-	result = soup.find_all('div', {'class':'caas-body'})
+	result = soup.find_all('div', {'class':'body'})
 	for res in result:
 		allText += res.text
 	return allText
@@ -78,6 +78,7 @@ def getCompanyStockInfo(tickerSymbol):
 	priceHistory = getPriceHistory(company)
 	futureEarningsDates = getEarningsDates(company)
 	newsArticles = getCompanyNews(company)
+
 	newsArticlesAllText = extractCompanyNewsArticles(newsArticles)
 	newsTextAnalysis = analyze.analyzeText(newsArticlesAllText)
 
@@ -90,5 +91,5 @@ def getCompanyStockInfo(tickerSymbol):
 	}
 	return finalStockAnalysis
 
-# companyStockAnalysis = getCompanyStockInfo('MSFT')
-# print(json.dumps(companyStockAnalysis, indent=4))
+companyStockAnalysis = getCompanyStockInfo('MSFT')
+print(json.dumps(companyStockAnalysis, indent=4))
